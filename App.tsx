@@ -27,7 +27,7 @@ import {
   ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
 import { ApiPromise, WsProvider } from '@polkadot/api';
-const { generateTypeScript } = require('@substrate/api-sidecar');
+const { Keyring } = require('@polkadot/keyring');
 
 const Section: React.FC<
   PropsWithChildren<{
@@ -67,23 +67,53 @@ const App = () => {
   };
 
   // Construct
-  const wsProvider = new WsProvider('ws://node.testnet.fx.land');
+  const wsProvider = new WsProvider('ws://192.168.43.23:9944');
+
   ApiPromise.create({ provider: wsProvider }).then((api) => {
     // Make our chain state/storage queries, and the once-off queries
     api.query.system.account('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY').then((account) => {
       console.log(account.data.free.toHuman());
     });
-    api.rpc.state.getMetadata().then((metadata) => {
-      console.log(metadata);
-      const options = {
-        out: './types',
-        ts: true,
-      };
-      
-      generateTypeScript(metadata, options);
-    });
+    console.log(api.tx.fula);
+    // Get the node's spec version
+    api.rpc.system.version().then((specVersion) => {
+      console.log(`spec version: ${specVersion}`);
+      let extrinsic = api.tx.fula.storageManifest(
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "QmcwQBzZcFVa7gyEQazd9WryzXKVMK2TvwBweruBZhy3pf",
+        1
+      );
+      console.log(extrinsic);
+      const keyring = new Keyring({ type: 'sr25519' });
+      console.log("keyring", keyring);
+      const myPair = keyring.addFromUri('//Alice');
+      console.log("myPair", myPair);
+      const era = api.createType('ExtrinsicEra', { current: 1, period: 10 });
+      console.log("era", era);
+      api.rpc.chain.getHeader().then((header) => {
+        console.log(header.number.toNumber());
+      api.rpc.chain.getBlockHash(header.number.toNumber()).then((blockHash) => {
+        console.log(blockHash);
+        api.rpc.chain.getBlock(blockHash).then((block) => {
+          console.log(block);
+          api.rpc.system.accountNextIndex(myPair.address).then((nonce) => {
+            console.log(nonce);
+            api.rpc.state.getRuntimeVersion().then((runtimeVersion) => {
+              console.log(runtimeVersion);
+                    const signedExtrinsic = extrinsic.sign(myPair, { blockHash, genesisHash: block.block.header.parentHash, nonce, runtimeVersion, era });
 
-    console.log(api);
+                    api.rpc.author.submitAndWatchExtrinsic(signedExtrinsic).then((result) => {
+                        console.log(result);
+                    });
+                });
+            });
+        });
+    });
+  })
+    
+    }) ;
+
+    
 
   }).catch((error) => {
     console.error(error);
