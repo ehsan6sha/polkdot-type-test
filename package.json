@@ -8,7 +8,7 @@
     "start": "react-native start",
     "test": "jest",
     "build": "yarn generate:defs && yarn generate:meta",
-    "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package sample-polkadotjs-typegen/interfaces --input ./src/interfaces --endpoint ./edgeware.json",
+    "generate:defs": "ts-node --skip-project node_modules/.bin/polkadot-types-from-defs --package sample-polkadotjs-typegen/interfaces --input ./interfaces --endpoint ./edgeware.json",
     "generate:meta": "ts-node --skip-project node_modules/.bin/polkadot-types-from-chain --package sample-polkadotjs-typegen/interfaces --endpoint ./edgeware.json --output ./interfaces",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
   },
