@@ -93,10 +93,10 @@ const App = () => {
       }).catch((error) => {
         console.log("error", error);
       });
-      
+      /*
       const era = api.createType('ExtrinsicEra', { current: 1, period: 10 });
       console.log("era", era);
-      /*api.rpc.chain.getHeader().then((header) => {
+      api.rpc.chain.getHeader().then((header) => {
         console.log(header.number.toNumber());
         api.rpc.chain.getBlockHash(header.number.toNumber()).then((blockHash) => {
           console.log("blockHash", blockHash);
@@ -115,7 +115,8 @@ const App = () => {
               });
           });
         });
-      });*/
+      });
+      */
     
     }) ;
 
