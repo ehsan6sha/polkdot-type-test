@@ -74,42 +74,48 @@ const App = () => {
     api.query.system.account('5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY').then((account) => {
       console.log(account.data.free.toHuman());
     });
-    console.log(api.tx.fula);
+    console.log("fula", api.tx.fula);
     // Get the node's spec version
     api.rpc.system.version().then((specVersion) => {
       console.log(`spec version: ${specVersion}`);
       let extrinsic = api.tx.fula.storageManifest(
         "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
-        "QmcwQBzZcFVa7gyEQazd9WryzXKVMK2TvwBweruBZhy3pf",
+        "QmWUjQczA5jHC3ibLq4y7CizVrebr1DTFRaTdJgFyxR5Nh",
         1
       );
-      console.log(extrinsic);
+      console.log("extrinsic", extrinsic);
       const keyring = new Keyring({ type: 'sr25519' });
       console.log("keyring", keyring);
-      const myPair = keyring.addFromUri('//Alice');
-      console.log("myPair", myPair);
+      const alice = keyring.addFromUri('//Alice');
+      console.log("alice", alice);
+      extrinsic.signAndSend(alice).then((result) => {
+        console.log("result", result);
+      }).catch((error) => {
+        console.log("error", error);
+      });
+      
       const era = api.createType('ExtrinsicEra', { current: 1, period: 10 });
       console.log("era", era);
-      api.rpc.chain.getHeader().then((header) => {
+      /*api.rpc.chain.getHeader().then((header) => {
         console.log(header.number.toNumber());
-      api.rpc.chain.getBlockHash(header.number.toNumber()).then((blockHash) => {
-        console.log(blockHash);
-        api.rpc.chain.getBlock(blockHash).then((block) => {
-          console.log(block);
-          api.rpc.system.accountNextIndex(myPair.address).then((nonce) => {
-            console.log(nonce);
-            api.rpc.state.getRuntimeVersion().then((runtimeVersion) => {
-              console.log(runtimeVersion);
-                    const signedExtrinsic = extrinsic.sign(myPair, { blockHash, genesisHash: block.block.header.parentHash, nonce, runtimeVersion, era });
-
-                    api.rpc.author.submitAndWatchExtrinsic(signedExtrinsic).then((result) => {
-                        console.log(result);
-                    });
-                });
-            });
+        api.rpc.chain.getBlockHash(header.number.toNumber()).then((blockHash) => {
+          console.log("blockHash", blockHash);
+          api.rpc.chain.getBlock(blockHash).then((block) => {
+            console.log("block", block);
+            api.rpc.system.accountNextIndex(alice.address).then((nonce) => {
+              console.log("nonce", nonce);
+              api.rpc.state.getRuntimeVersion().then((runtimeVersion) => {
+                console.log("runtimeVersion", runtimeVersion);
+                      const signedExtrinsic = extrinsic.sign(alice, { blockHash, genesisHash: block.block.header.parentHash, nonce, runtimeVersion, era });
+                      console.log("extrinsic signed");
+                      api.rpc.author.submitAndWatchExtrinsic(signedExtrinsic).then((result) => {
+                          console.log(result);
+                      });
+                  });
+              });
+          });
         });
-    });
-  })
+      });*/
     
     }) ;
 
