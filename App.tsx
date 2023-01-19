@@ -67,7 +67,7 @@ const App = () => {
   };
 
   // Construct
-  const wsProvider = new WsProvider('ws://192.168.43.23:9944');
+  const wsProvider = new WsProvider('ws://node.testnet.fx.land');
 
   ApiPromise.create({ provider: wsProvider }).then((api) => {
     // Make our chain state/storage queries, and the once-off queries
