@@ -27,6 +27,7 @@ import {
   ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
 import { default as EventTypes } from './interfaces/lookup';
+import { isHex, isU8a, u8aToU8a, stringToU8a, u8aToString } from '@polkadot/util';
 
 import type { Bytes, Compact, Enum, Null, Option, Result, Struct, U8aFixed, Vec, bool, i128, i32, u128, u16, u32, u64, u8 } from '@polkadot/types-codec';
 import type { AccountId32, Call, H256, MultiAddress, Perbill, Weight } from '@polkadot/types/interfaces/runtime';
@@ -65,7 +66,7 @@ const Section: React.FC<
 
 async function main () {
   // Initialise the provider to connect to the local node
-  const provider = new WsProvider('ws://node.testnet.fx.land');
+  const provider = new WsProvider('ws://192.168.43.23:9944');
 
   // Create the API and wait until ready
 
@@ -110,8 +111,35 @@ const lastHeader = await api.rpc.chain.getHeader();
 // Log the information
 console.log(`${chain}: last block #${lastHeader.number} has hash ${lastHeader.hash}`);
 
-let metadata = JSON.parse('{"manifest_metadata": {"job": {"work": "Storage", "engine": "IPFS", "uri": "QmcwQBzZcFVa7gyEQazd9WryzXKVMK2TvwBweruBZhy3pf"}}}');
-console.log(metadata);
+let manifest_metadata = JSON.parse('{"job": {"work": "Storage", "engine": "IPFS", "uri": "bafybeibpkbze56segjvs4qxyntqeykx5ywyqs6kvrqs4ddmikhxx7fxt7i"}}');
+let metadataU8a = stringToU8a(JSON.stringify(manifest_metadata));
+let metadataBytes = u8aToString(metadataU8a);
+
+  await api.tx.fula
+    .uploadManifest(metadataBytes,"bafybeibpkbze56segjvs4qxyntqeykx5ywyqs6kvrqs4ddmikhxx7fxt7i", 1, 3)
+    .signAndSend(alice, ({ events = [], status, txHash }) => {
+      console.log(`uploadManifest Current status is ${status.type}`);
+
+      if (status.isFinalized) {
+        console.log(`uploadManifest Transaction included at blockHash ${status.asFinalized}`);
+        console.log(`uploadManifest Transaction hash ${txHash.toHex()}`);
+
+        const storageKey = api.query.system.account.key("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
+        api.rpc.state.getStorage(storageKey, status.asFinalized)
+        .then((response) => {
+          console.log("uploadManifest response", response);
+          const decoded = api.registry.createType('StorageManifestError', response);
+          console.log("uploadManifest decoded", decoded.toJSON());
+        });
+        
+        // Loop through Vec<EventRecord> to display all events
+        events.forEach(({ phase, event: { data, method, section } }) => {
+          console.log(`\t' ${phase}: ${section}.${method}:: ${data}`);
+        });
+
+      }
+    });
+  exit;
 
   const test = await api.tx.fula.storageManifest(
     "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
@@ -125,7 +153,7 @@ console.log(metadata);
       console.log(`Transaction included at blockHash ${status.asFinalized}`);
       console.log(`Transaction hash ${txHash.toHex()}`);
 
-      const storageKey = api.query.system.account.key("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY")
+      const storageKey = api.query.system.account.key("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
       api.rpc.state.getStorage(storageKey, status.asFinalized)
       .then((response) => {
         console.log("response", response);
@@ -145,8 +173,6 @@ console.log(metadata);
         console.log(`\t' ${phase}: ${section}.${method}:: ${data}`);
         i = i+1;
       });
-
-      test();
     }
   });
 }
