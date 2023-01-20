@@ -27,7 +27,9 @@ import {
   ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
 import { default as EventTypes } from './interfaces/lookup';
-import { isHex, isU8a, u8aToU8a, stringToU8a, u8aToString } from '@polkadot/util';
+import { isHex, isU8a, u8aToU8a, stringToU8a, u8aToString, hexToU8a } from '@polkadot/util';
+import { Abi } from '@polkadot/api-contract';
+
 
 import type { Bytes, Compact, Enum, Null, Option, Result, Struct, U8aFixed, Vec, bool, i128, i32, u128, u16, u32, u64, u8 } from '@polkadot/types-codec';
 import type { AccountId32, Call, H256, MultiAddress, Perbill, Weight } from '@polkadot/types/interfaces/runtime';
@@ -66,12 +68,13 @@ const Section: React.FC<
 
 async function main () {
   // Initialise the provider to connect to the local node
-  const provider = new WsProvider('ws://192.168.43.23:9944');
+  const provider = new WsProvider('wss://node.testnet.fx.land');
 
   // Create the API and wait until ready
 
   const api = await ApiPromise.create({ types: {
     StorageManifestOutput: EventTypes.FunctionlandFulaEvent._enum.StorageManifestOutput,
+    ManifestOutput: EventTypes.FunctionlandFulaEvent._enum.ManifestOutput,
     StorageManifestError : {
       message: 'Text',
       description: 'Text',
@@ -89,7 +92,7 @@ async function main () {
 
   const keyring = new Keyring({ type: 'sr25519' });
 
-// Add our Alice dev account
+// Add our Alice dev account: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 const alice = keyring.addFromUri('//Alice', { name: 'Alice' });
 //const bob = keyring.addFromUri('//Bob', { name: 'Bob default' });
 
@@ -111,30 +114,82 @@ const lastHeader = await api.rpc.chain.getHeader();
 // Log the information
 console.log(`${chain}: last block #${lastHeader.number} has hash ${lastHeader.hash}`);
 
-let manifest_metadata = JSON.parse('{"job": {"work": "Storage", "engine": "IPFS", "uri": "bafybeibpkbze56segjvs4qxyntqeykx5ywyqs6kvrqs4ddmikhxx7fxt7i"}}');
+let manifest_metadata = JSON.parse('{"job": {"work": "Storage", "engine": "IPFS", "uri": "bafybeiaf7cuvxdhrwvclxny2nrvtc64pnsvfbpfr2jrps5fea3yyulmwhu"}}');
 let metadataU8a = stringToU8a(JSON.stringify(manifest_metadata));
 let metadataBytes = u8aToString(metadataU8a);
 
   await api.tx.fula
-    .uploadManifest(metadataBytes,"bafybeibpkbze56segjvs4qxyntqeykx5ywyqs6kvrqs4ddmikhxx7fxt7i", 1, 3)
-    .signAndSend(alice, ({ events = [], status, txHash }) => {
-      console.log(`uploadManifest Current status is ${status.type}`);
+    .uploadManifest(metadataBytes,"bafybeiaf7cuvxdhrwvclxny2nrvtc64pnsvfbpfr2jrps5fea3yyulmwhu", 1, 3)
+    .signAndSend(alice, async (result) => {
+      console.log(`uploadManifest Current status is ${result.status.type}`);
 
-      if (status.isFinalized) {
-        console.log(`uploadManifest Transaction included at blockHash ${status.asFinalized}`);
-        console.log(`uploadManifest Transaction hash ${txHash.toHex()}`);
+      if (result.status.isFinalized) {
+        console.log(`uploadManifest Transaction included at blockHash ${result.status.asFinalized}`);
+        console.log(`uploadManifest Transaction hash ${result.txHash.toHex()}`);
+        console.log("\nResult is : ", JSON.stringify(result, null, 2));
+        result.events.forEach(({ phase, event: { data, method, section } }) => {
+          console.log(`\t' ${phase}: ${section}.${method}:: ${data}`);
+          if (section=='fula') {
+            console.log("found output");
+            console.log(`${section}.${method}:: data:: ${data}`);
+            const dataDecoded = api.createType('ManifestOutput', data);
+            console.log("dataDecoded is ", dataDecoded.toHuman());
+          } else {
+            console.log("not found output");
+            // Other, CannotLookup, BadOrigin, no extra info
+          }
+        });
 
         const storageKey = api.query.system.account.key("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
-        api.rpc.state.getStorage(storageKey, status.asFinalized)
-        .then((response) => {
-          console.log("uploadManifest response", response);
-          const decoded = api.registry.createType('StorageManifestError', response);
-          console.log("uploadManifest decoded", decoded.toJSON());
-        });
-        
-        // Loop through Vec<EventRecord> to display all events
-        events.forEach(({ phase, event: { data, method, section } }) => {
-          console.log(`\t' ${phase}: ${section}.${method}:: ${data}`);
+
+        const signedBlock = await api.rpc.chain.getBlock(result.status.asFinalized);
+        // get the api and events at a specific block
+        const apiAt = await api.at(signedBlock.block.header.hash);
+        const allRecords = await apiAt.query.system.events();
+
+        // map between the extrinsics and events
+        signedBlock.block.extrinsics.forEach(({ method: { method, section } }, index) => {
+          allRecords
+            // filter the specific events based on the phase and then the
+            // index of our extrinsic in the block
+            .filter(({ phase }) =>
+              phase.isApplyExtrinsic &&
+              phase.asApplyExtrinsic.eq(index)
+            )
+            // test the events against the specific types we are looking for
+            .forEach(({ event }) => {
+              if (api.events.system.ExtrinsicSuccess.is(event)) {
+                // extract the data for this event
+                // (In TS, because of the guard above, these will be typed)
+                const [dispatchInfo] = event.data;
+                // decode the error
+                console.log(`${section}.${method}:: ExtrinsicSuccess:: ${JSON.stringify(dispatchInfo.toString())}`);
+                
+
+                
+              } else if (api.events.system.ExtrinsicFailed.is(event)) {
+                // extract the data for this event
+                const [dispatchError, dispatchInfo] = event.data;
+                let errorInfo;
+
+                // decode the error
+                if (dispatchError.isModule) {
+                  console.log("dispatchError is module");
+                  // for module errors, we have the section indexed, lookup
+                  // (For specific known errors, we can also do a check against the
+                  // api.errors.<module>.<ErrorName>.is(dispatchError.asModule) guard)
+                  const decoded = api.registry.findMetaError(dispatchError.asModule);
+
+                  errorInfo = `${decoded.section}.${decoded.name}`;
+                } else {
+                  console.log("dispatchError is not module");
+                  // Other, CannotLookup, BadOrigin, no extra info
+                  errorInfo = dispatchError.toString();
+                }
+
+                console.log(`${section}.${method}:: ExtrinsicFailed:: ${errorInfo}`);
+              }
+            });
         });
 
       }
