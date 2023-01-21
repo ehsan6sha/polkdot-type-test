@@ -73,8 +73,7 @@ async function main () {
   // Create the API and wait until ready
 
   const api = await ApiPromise.create({ types: {
-    StorageManifestOutput: EventTypes.FunctionlandFulaEvent._enum.StorageManifestOutput,
-    ManifestOutput: EventTypes.FunctionlandFulaEvent._enum.ManifestOutput,
+    ...EventTypes.FunctionlandFulaEvent._enum,
     StorageManifestError : {
       message: 'Text',
       description: 'Text',
@@ -114,16 +113,18 @@ const lastHeader = await api.rpc.chain.getHeader();
 // Log the information
 console.log(`${chain}: last block #${lastHeader.number} has hash ${lastHeader.hash}`);
 
-let manifest_metadata = JSON.parse('{"job": {"work": "Storage", "engine": "IPFS", "uri": "bafybeiaf7cuvxdhrwvclxny2nrvtc64pnsvfbpfr2jrps5fea3yyulmwhu"}}');
+let manifest_metadata = JSON.parse('{"job": {"work": "Storage", "engine": "IPFS", "uri": "bafybeiar3h3qkh3k5vidnrgcda7c5xr5pi2rmzkqyi3air6irtwyvb3e5q"}}');
 let metadataU8a = stringToU8a(JSON.stringify(manifest_metadata));
 let metadataBytes = u8aToString(metadataU8a);
 
   await api.tx.fula
-    .uploadManifest(metadataBytes,"bafybeiaf7cuvxdhrwvclxny2nrvtc64pnsvfbpfr2jrps5fea3yyulmwhu", 1, 3)
+    .uploadManifest(metadataBytes,"bafybeiar3h3qkh3k5vidnrgcda7c5xr5pi2rmzkqyi3air6irtwyvb3e5q", 1, 3)
     .signAndSend(alice, async (result) => {
       console.log(`uploadManifest Current status is ${result.status.type}`);
 
+      
       if (result.status.isFinalized) {
+        let dataDecoded;
         console.log(`uploadManifest Transaction included at blockHash ${result.status.asFinalized}`);
         console.log(`uploadManifest Transaction hash ${result.txHash.toHex()}`);
         console.log("\nResult is : ", JSON.stringify(result, null, 2));
@@ -132,45 +133,14 @@ let metadataBytes = u8aToString(metadataU8a);
           if (section=='fula') {
             console.log("found output");
             console.log(`${section}.${method}:: data:: ${data}`);
-            const dataDecoded = api.createType('ManifestOutput', data);
+            dataDecoded = api.createType('ManifestOutput', data);
             console.log("dataDecoded is ", dataDecoded.toHuman());
           } else {
             console.log("not found output");
-            // Other, CannotLookup, BadOrigin, no extra info
-          }
-        });
-
-        const storageKey = api.query.system.account.key("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY");
-
-        const signedBlock = await api.rpc.chain.getBlock(result.status.asFinalized);
-        // get the api and events at a specific block
-        const apiAt = await api.at(signedBlock.block.header.hash);
-        const allRecords = await apiAt.query.system.events();
-
-        // map between the extrinsics and events
-        signedBlock.block.extrinsics.forEach(({ method: { method, section } }, index) => {
-          allRecords
-            // filter the specific events based on the phase and then the
-            // index of our extrinsic in the block
-            .filter(({ phase }) =>
-              phase.isApplyExtrinsic &&
-              phase.asApplyExtrinsic.eq(index)
-            )
-            // test the events against the specific types we are looking for
-            .forEach(({ event }) => {
-              if (api.events.system.ExtrinsicSuccess.is(event)) {
-                // extract the data for this event
-                // (In TS, because of the guard above, these will be typed)
-                const [dispatchInfo] = event.data;
-                // decode the error
-                console.log(`${section}.${method}:: ExtrinsicSuccess:: ${JSON.stringify(dispatchInfo.toString())}`);
-                
-
-                
-              } else if (api.events.system.ExtrinsicFailed.is(event)) {
-                // extract the data for this event
-                const [dispatchError, dispatchInfo] = event.data;
-                let errorInfo;
+            if(section=='system' && method=='ExtrinsicFailed') {
+              console.log("ExtrinsicFailed");
+              const [dispatchError, dispatchInfo] = data;
+              let errorInfo;
 
                 // decode the error
                 if (dispatchError.isModule) {
@@ -186,10 +156,17 @@ let metadataBytes = u8aToString(metadataU8a);
                   // Other, CannotLookup, BadOrigin, no extra info
                   errorInfo = dispatchError.toString();
                 }
-
-                console.log(`${section}.${method}:: ExtrinsicFailed:: ${errorInfo}`);
+                console.log("final errorInfo is ", errorInfo);
+            } else if(section=='system' && method=='ExtrinsicSuccess') {
+              console.log("ExtrinsicSuccess");
+              if(dataDecoded){
+                console.log("final success response is ", dataDecoded.toHuman());
+              } else {
+                console.log("final success response is not set");
               }
-            });
+            }
+            // Other, CannotLookup, BadOrigin, no extra info
+          }
         });
 
       }
